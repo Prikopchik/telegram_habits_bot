@@ -1,20 +1,79 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+
+
+class UserManager(BaseUserManager):
+    """Кастомный менеджер пользователей"""
+    
+    def create_user(self, email, password=None, **extra_fields):
+        """Создание обычного пользователя"""
+        if not email:
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+    
+    def create_superuser(self, email, password=None, **extra_fields):
+        """Создание суперпользователя"""
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+        
+        return self.create_user(email, password, **extra_fields)
+
+
+class User(AbstractUser):
+    """Кастомная модель пользователя"""
+    
+    username = None
+    email = models.EmailField(unique=True, verbose_name='Email')
+    telegram_chat_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='Telegram Chat ID',
+        help_text='ID чата в Telegram для отправки уведомлений'
+    )
+    telegram_username = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='Telegram Username',
+        help_text='Имя пользователя в Telegram'
+    )
+    
+    objects = UserManager()
+    
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+    
+    class Meta:
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
+    
+    def __str__(self):
+        return self.email
 
 
 class Habit(models.Model):
     """Модель привычки"""
     
     user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
+        User,
+        on_delete=models.CASCADE,
         verbose_name='Пользователь',
         related_name='habits'
     )
     place = models.CharField(
-        max_length=200, 
+        max_length=200,
         verbose_name='Место',
         help_text='Место, в котором необходимо выполнять привычку'
     )
@@ -23,7 +82,7 @@ class Habit(models.Model):
         help_text='Время, когда необходимо выполнять привычку'
     )
     action = models.CharField(
-        max_length=200, 
+        max_length=200,
         verbose_name='Действие',
         help_text='Действие, которое представляет собой привычка'
     )

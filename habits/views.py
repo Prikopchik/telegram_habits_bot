@@ -1,17 +1,38 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.contrib.auth.models import User
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
-from .models import Habit, HabitLog
+from .models import User, Habit, HabitLog
 from .serializers import (
-    HabitSerializer, 
-    HabitCreateSerializer, 
+    HabitSerializer,
+    HabitCreateSerializer,
     HabitLogSerializer,
     UserSerializer
 )
 from .permissions import IsOwnerOrReadOnly
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Кастомный сериализатор для JWT токенов"""
+    
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Добавляем кастомные поля в токен
+        token['email'] = user.email
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        
+        return token
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Кастомное представление для получения JWT токенов"""
+    serializer_class = CustomTokenObtainPairSerializer
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -27,12 +48,15 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = User.objects.create_user(
-                username=serializer.validated_data['username'],
-                email=serializer.validated_data.get('email', ''),
-                password=request.data.get('password')
+                email=serializer.validated_data['email'],
+                password=request.data.get('password'),
+                first_name=serializer.validated_data.get('first_name', ''),
+                last_name=serializer.validated_data.get('last_name', ''),
+                telegram_chat_id=serializer.validated_data.get('telegram_chat_id'),
+                telegram_username=serializer.validated_data.get('telegram_username')
             )
             return Response(
-                {'message': 'Пользователь успешно зарегистрирован'}, 
+                {'message': 'Пользователь успешно зарегистрирован'},
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
